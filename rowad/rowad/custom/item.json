@@ -135,7 +135,7 @@
    "in_list_view": 0,
    "in_standard_filter": 0,
    "insert_after": "stock_uom",
-   "label": "Is Maintenance Applicable",
+   "label": "Is Maintenance Applicable?",
    "length": 0,
    "modified": "2021-01-21 10:35:30.405297",
    "modified_by": "Administrator",
