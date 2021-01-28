@@ -65,7 +65,7 @@ def make_task_based_project(source_name, target_doc=None):
             }
         },
     }, target_doc, postprocess)
-    doc.save()
+    doc.save(ignore_permissions=True)
     doclist.append(doc)
     if doc:
         for item in so.get("sales_order_item_user_allocation"):
@@ -75,7 +75,7 @@ def make_task_based_project(source_name, target_doc=None):
                 task.subject=item.item
                 task.item_cf=item.item
                 task.completed_by=item.user
-                task.save()
+                task.save(ignore_permissions=True)
                 doclist.append(task)
     return doclist
 
@@ -166,7 +166,7 @@ def make_delivery_note(source_name,task_name,serial_no=None,target_doc=None, ski
 
     target_doc = get_mapped_doc("Sales Order", source_name, mapper, target_doc, set_missing_values)
     [target_doc.items.remove(d) for d in target_doc.get('items') if d.idx > 1]
-    target_doc.save()
+    target_doc.save(ignore_permissions=True)
     return target_doc                
 
 @frappe.whitelist()
@@ -178,12 +178,12 @@ def make_maintenance_schedule(source_name, target_doc=None):
 
     def update_item(source, target, source_parent):
         if source.is_maintenance_applicable_cf==0:
-            frappe.msgprint(_('Delivery Note item {0} has no value for Is Maintenance Applicable ?').format(source.item_code),
+            frappe.msgprint(_('Delivery Note item <b>{0}</b> has no value for <i>Is Maintenance Applicable ?</i>').format(source.item_code),
             title='Maintenance Schedule cannot be created.')
             return False
         elif source.is_maintenance_applicable_cf==1:
             if source.maintenance_for_years_cf<2:
-                frappe.msgprint(_('Delivery Note item {0} has Maintenance For Years values as {1}. <br> It should be greater than 1.').format(source.item_code,source.maintenance_for_years_cf),
+                frappe.msgprint(_('Delivery Note item <b>{0}</b> has <i>Maintenance For Years</i> values as <b>{1}</b>. <br> It should be greater than 1.').format(source.item_code,source.maintenance_for_years_cf),
                 title='Incorrect Maintenance For Years values.')
                 return False                
         target.start_date = source_parent.posting_date
@@ -212,6 +212,6 @@ def make_maintenance_schedule(source_name, target_doc=None):
             "add_if_empty": True
         }
     }, target_doc,set_missing_values)
-    target_doc.save()
+    target_doc.save(ignore_permissions=True)
     doclist.append(target_doc)
     return doclist    
