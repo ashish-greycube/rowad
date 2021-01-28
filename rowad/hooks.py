@@ -86,7 +86,7 @@ doctype_js = {
 
 doc_events = {
 	"Sales Order": {
-		"on_update": "rowad.api.validate_sales_order_item_user_allocation",
+		"before_submit": "rowad.api.validate_sales_order_item_user_allocation",
 	},
 	"Task": {
 		"validate": "rowad.api.validate_task_and_create_delivery_note_maintenance_schedule",
