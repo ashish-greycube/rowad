@@ -1,10 +1,11 @@
 import  frappe
 from frappe import _
 from frappe.model.mapper import get_mapped_doc
-from frappe.utils import cint,flt,add_years,nowdate
+from frappe.utils import cint,flt,add_years,nowdate,add_days
 from erpnext.stock.doctype.item.item import get_item_defaults
 from erpnext.setup.doctype.item_group.item_group import get_item_group_defaults
 from frappe.contacts.doctype.address.address import get_company_address
+
 
 def validate_sales_order_item_user_allocation(self,method):
     # creat a compact dictionary ex. {"Item1:1","Item2:2"}
@@ -172,9 +173,21 @@ def make_delivery_note(source_name,task_name,serial_no=None,target_doc=None, ski
 @frappe.whitelist()
 def make_maintenance_schedule(source_name, target_doc=None):
     doclist=[]
+    STANDARD_USERS = ("Guest", "Administrator")
+    sales_person_name=None
+    user = frappe.session.user not in STANDARD_USERS and frappe.session.user or None
+    if user:
+        employee=frappe.db.get_list('Employee', filters={'user_id': ['=', user]},fields=['name'])
+        if len(employee)>0:
+            sales_person = frappe.db.get_list('Sales Person', filters={'employee': ['=', employee[0].name]},fields=['name'])
+            if len(sales_person)>0:
+                sales_person_name=sales_person[0].name   
     def set_missing_values(source, target):
-        target.transaction_date=source.posting_date
+        target.project_cf=source.project
+         # + 1 
+        target.transaction_date=add_days(source.posting_date,1)
         target.run_method("set_missing_values")
+        target.run_method("generate_schedule")
 
     def update_item(source, target, source_parent):
         if source.is_maintenance_applicable_cf==0:
@@ -185,17 +198,19 @@ def make_maintenance_schedule(source_name, target_doc=None):
             if source.maintenance_for_years_cf<2:
                 frappe.msgprint(_('Delivery Note item <b>{0}</b> has <i>Maintenance For Years</i> values as <b>{1}</b>. <br> It should be greater than 1.').format(source.item_code,source.maintenance_for_years_cf),
                 title='Incorrect Maintenance For Years values.')
-                return False                
-        target.start_date = source_parent.posting_date
+                return False 
+        # + 1                       
+        target.start_date = add_days(source_parent.posting_date,1)
         target.end_date = add_years(target.start_date, source.maintenance_for_years_cf)
         target.periodicity = 'Yearly'
         target.no_of_visits=source.maintenance_for_years_cf
-        target.sales_person='Sales Team'
-	# maint_schedule = frappe.db.sql("""select t1.name
-	# 	from `tabMaintenance Schedule` t1, `tabMaintenance Schedule Item` t2
-	# 	where t2.parent=t1.name and t2.maintenance_schedule=%s and t1.docstatus=1""", source_name)
+        target.serial_no=source.serial_no
+        target.sales_person= sales_person_name or 'Sales Team'
+    # maint_schedule = frappe.db.sql("""select t1.name
+    # 	from `tabMaintenance Schedule` t1, `tabMaintenance Schedule Item` t2
+    # 	where t2.parent=t1.name and t2.maintenance_schedule=%s and t1.docstatus=1""", source_name)
 
-	# if not maint_schedule:
+    # if not maint_schedule:
     target_doc = get_mapped_doc("Delivery Note", source_name, {
         "Delivery Note": {
             "doctype": "Maintenance Schedule",
@@ -215,3 +230,92 @@ def make_maintenance_schedule(source_name, target_doc=None):
     target_doc.save(ignore_permissions=True)
     doclist.append(target_doc)
     return doclist    
+
+
+@frappe.whitelist()
+def make_maintenance_visit(source_name, target_doc=None):
+    doclist=[]
+    items=[]
+    STANDARD_USERS = ("Guest", "Administrator")
+    sales_person_name=None
+    user = frappe.session.user not in STANDARD_USERS and frappe.session.user or None
+    if user:
+        employee=frappe.db.get_list('Employee', filters={'user_id': ['=', user]},fields=['name'])
+        if len(employee)>0:
+            sales_person = frappe.db.get_list('Sales Person', filters={'employee': ['=', employee[0].name]},fields=['name'])
+            if len(sales_person)>0:
+                sales_person_name=sales_person[0].name
+    
+    def update_status(source, target, parent):
+        target.project_cf=source.project_cf
+        target.maintenance_type = "Scheduled"
+
+    def update_item(source, target, source_parent):
+        items.append({'item_code':source.item_code,'qty':1,'stock_uom':frappe.db.get_value('Item', source.item_code, 'stock_uom')})
+        if sales_person_name:
+            target.service_person=sales_person_name
+        else:
+            target.service_person='Sales Team'
+
+    doc = get_mapped_doc("Maintenance Schedule", source_name, {
+        "Maintenance Schedule": {
+            "doctype": "Maintenance Visit",
+            "field_map": {
+                "name": "maintenance_schedule"
+            },
+            "validation": {
+                "docstatus": ["=", 1]
+            },
+            "postprocess": update_status
+        },
+        "Maintenance Schedule Item": {
+            "doctype": "Maintenance Visit Purpose",
+            "field_map": {
+                "parent": "prevdoc_docname",
+                "parenttype": "prevdoc_doctype"
+            },
+            "postprocess": update_item,
+        }    
+    }, target_doc)
+    # for item in items:
+    #     row=doclist.append('maintenance_consumed_items_cf',item)
+    # doc.save(ignore_permissions=True)
+    # doclist.append(doc)
+    return doc    
+
+@frappe.whitelist()
+def make_stock_entry(source_name, target_doc=None):
+    doclist=[]
+    def update_item(source, target, source_parent):
+        sales_person = source_parent.get('purposes')[0].service_person
+        s_warehouse=frappe.db.get_value('Sales Person', sales_person, 'default_warehouse_cf')
+        target.s_warehouse = s_warehouse
+        if source_parent.project_cf:
+            target.cost_center = frappe.db.get_value('Project', source_parent.project_cf, 'cost_center') or None
+
+    def set_missing_values(source, target):
+        target.stock_entry_type = "Material Issue"
+        target.calculate_rate_and_amount()
+        target.set_missing_values()
+        target.set_stock_entry_type()
+
+    doc = get_mapped_doc("Maintenance Visit", source_name, {
+        "Maintenance Visit": {
+            "doctype": "Stock Entry",
+            "validation": {
+                "docstatus": ["=", 1]
+            }
+        },
+        "Maintenance Consumed Items": {
+            "doctype": "Stock Entry Detail",
+            "field_map": {
+                "item_code":"item_code",
+                "qty":"qty",
+                "stock_uom":"stock_uom"
+            },
+            "postprocess": update_item
+        }
+    }, target_doc, set_missing_values)
+    doc.save(ignore_permissions=True)
+    doclist.append(doc)
+    return doclist   

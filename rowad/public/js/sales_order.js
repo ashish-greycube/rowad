@@ -1,10 +1,12 @@
 frappe.ui.form.on("Sales Order", {
+    on_submit:function(frm) {
+        make_task_based_project(frm)
+    },    
     refresh:function(frm){
         if (frm.doc.docstatus==1) {     
         if(frm.doc.status !== 'Closed') {
             if(frm.doc.status !== 'On Hold') {
                     // project
-                  
 					if(flt(frm.doc.per_delivered, 2) < 100) {
                         frm.add_custom_button(__('Task based Project'), () => make_task_based_project(frm), __('Create'));
                 }                

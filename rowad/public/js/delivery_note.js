@@ -1,4 +1,7 @@
 frappe.ui.form.on("Delivery Note", {
+    on_submit:function(frm) {
+        make_maintenance_schedule(frm)
+    },    
 	refresh: function(frm) {
 		if (frm.doc.docstatus === 1 ) {
             frm.add_custom_button(__('Maintenance Schedule'), () => make_maintenance_schedule(frm), __('Create'));            
