@@ -63,6 +63,7 @@ doctype_js = {
 
 # before_install = "rowad.install.before_install"
 # after_install = "rowad.install.after_install"
+after_migrate = "rowad.hook_methods.after_migrate"
 
 # Desk Notifications
 # ------------------

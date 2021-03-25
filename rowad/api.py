@@ -184,6 +184,7 @@ def make_maintenance_schedule(source_name, target_doc=None):
                 sales_person_name=sales_person[0].name   
     def set_missing_values(source, target):
         target.project_cf=source.project
+        target.shipping_address_name_cf=source.shipping_address_name
          # + 1 
         target.transaction_date=add_days(source.posting_date,1)
         target.run_method("set_missing_values")
@@ -249,6 +250,7 @@ def make_maintenance_visit(source_name, target_doc=None):
     def update_status(source, target, parent):
         target.project_cf=source.project_cf
         target.maintenance_type = "Scheduled"
+        target.shipping_address_name_cf=source.shipping_address_name_cf
 
     def update_item(source, target, source_parent):
         items.append({'item_code':source.item_code,'qty':1,'stock_uom':frappe.db.get_value('Item', source.item_code, 'stock_uom')})
